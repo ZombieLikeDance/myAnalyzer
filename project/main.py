@@ -1,158 +1,3 @@
-# 导入相关包
-import os
-import random
-import numpy as np
-from Maze import Maze
-from Runner import Runner
-from QRobot import QRobot
-from ReplayDataSet import ReplayDataSet
-from torch_py.MinDQNRobot import MinDQNRobot as TorchRobot # PyTorch版本
-from keras_py.MinDQNRobot import MinDQNRobot as KerasRobot # Keras版本
-import matplotlib.pyplot as plt
-
-import numpy as np
-
-# 机器人移动方向
-move_map = {
-    'u': (-1, 0), # up
-    'r': (0, +1), # right
-    'd': (+1, 0), # down
-    'l': (0, -1), # left
-}
-
-
-# 迷宫路径搜索树
-class SearchTree(object):
-
-
-    def __init__(self, loc=(), action='', parent=None):
-        """
-        初始化搜索树节点对象
-        :param loc: 新节点的机器人所处位置
-        :param action: 新节点的对应的移动方向
-        :param parent: 新节点的父辈节点
-        """
-
-        self.loc = loc  # 当前节点位置
-        self.to_this_action = action  # 到达当前节点的动作
-        self.parent = parent  # 当前节点的父节点
-        self.children = []  # 当前节点的子节点
-
-    def add_child(self, child):
-        """
-        添加子节点
-        :param child:待添加的子节点
-        """
-        self.children.append(child)
-
-    def is_leaf(self):
-        """
-        判断当前节点是否是叶子节点
-        """
-        return len(self.children) == 0
-
-
-def expand(maze, is_visit_m, node):
-    """
-    拓展叶子节点，即为当前的叶子节点添加执行合法动作后到达的子节点
-    :param maze: 迷宫对象
-    :param is_visit_m: 记录迷宫每个位置是否访问的矩阵
-    :param node: 待拓展的叶子节点
-    """
-    can_move = maze.can_move_actions(node.loc)
-    for a in can_move:
-        new_loc = tuple(node.loc[i] + move_map[a][i] for i in range(2))
-        if not is_visit_m[new_loc]:
-            child = SearchTree(loc=new_loc, action=a, parent=node)
-            node.add_child(child)
-
-
-def back_propagation(node):
-    """
-    回溯并记录节点路径
-    :param node: 待回溯节点
-    :return: 回溯路径
-    """
-    path = []
-    while node.parent is not None:
-        path.insert(0, node.to_this_action)
-        node = node.parent
-    return path
-
-
-def breadth_first_search(maze):
-    """
-    对迷宫进行广度优先搜索
-    :param maze: 待搜索的maze对象
-    """
-    start = maze.sense_robot()
-    root = SearchTree(loc=start)
-    queue = [root]  # 节点队列，用于层次遍历
-    h, w, _ = maze.maze_data.shape
-    is_visit_m = np.zeros((h, w), dtype=np.int)  # 标记迷宫的各个位置是否被访问过
-    path = []  # 记录路径
-    while True:
-        current_node = queue[0]
-        is_visit_m[current_node.loc] = 1  # 标记当前节点位置已访问
-
-        if current_node.loc == maze.destination:  # 到达目标点
-            path = back_propagation(current_node)
-            break
-
-        if current_node.is_leaf():
-            expand(maze, is_visit_m, current_node)
-
-        # 入队
-        for child in current_node.children:
-            queue.append(child)
-
-        # 出队
-        queue.pop(0)
-
-    return path
-    
-def my_search(maze):
-    """
-    任选深度优先搜索算法、最佳优先搜索（A*)算法实现其中一种
-    :param maze: 迷宫对象
-    :return :到达目标点的路径 如：["u","u","r",...]
-    """
-
-    path = []
-
-    # -----------------请实现你的算法代码--------------------------------------
-    start = maze.sense_robot() 
-    root = SearchTree(loc=start)
-    stack = [root]  # 使用栈结构实现DFS
-    h, w, _ = maze.maze_data.shape  
-    is_visit_m = np.zeros((h,  w), dtype=np.int) 
-    
-    while stack:
-        current_node = stack.pop()   # 弹出栈顶元素
-        
-        # 终点判断必须放在标记访问前，否则可能漏判最后一个节点
-        if current_node.loc  == maze.destination: 
-            path = back_propagation(current_node)
-            break 
-        
-        if is_visit_m[current_node.loc]  == 1:
-            continue 
-        
-        is_visit_m[current_node.loc]  = 1  # 标记当前节点为已访问 
-        
-        # 叶子节点扩展时需要生成子节点 
-        if current_node.is_leaf(): 
-            expand(maze, is_visit_m, current_node)
-        
-        # 逆序压栈保证子节点按原顺序处理（例如u方向优先于r方向）
-        for child in reversed(current_node.children): 
-            # 压栈前检查子节点是否已被访问（避免重复路径）
-            if is_visit_m[child.loc] == 0:  
-                stack.append(child) 
-    # -----------------------------------------------------------------------
-    return path
-
-
 import torch
 import torch.nn  as nn
 import numpy as np 
@@ -160,19 +5,6 @@ from collections import deque
  
 class DQN(nn.Module):
     """ 深度Q网络结构设计 """
-    '''def __init__(self, input_dim, output_dim):
-        super(DQN, self).__init__()
-        self.net  = nn.Sequential(
-            nn.Linear(input_dim, 128),
-            nn.ReLU(),
-            nn.Linear(128, 64),
-            nn.ReLU(),
-            nn.Linear(64, output_dim)
-        )
-    
-    def forward(self, state):
-        return self.net(state) 
-    '''
     def __init__(self, input_dim, output_dim):
         super(DQN, self).__init__()
         
@@ -301,7 +133,17 @@ class Robot(QRobot):
         self.epsilon  = max(self.epsilon_min, self.epsilon  * self.epsilon_decay) 
         # -----------------------------------------------------------------------
         #print("train",action,reward)
-        if(reward==50):print("manmanmanamanaanamnamnam")
+        self.maze.draw_maze()
+        self.maze.draw_robot()
+        for y in range(self.maze.maze_size):
+            for x in range(self.maze.maze_size):
+                state = np.array([y, x])
+                with torch.no_grad():
+                    q_values = self.policy_net(torch.FloatTensor(state)).numpy()
+                q_str = "\n".join([f"{a}:{q_values[i]:.2f}" for i, a in enumerate(self.actions)])
+                plt.text(x + 0.5, y + 0.5, q_str, color='blue', ha='center', va='center', fontsize=8)
+        plt.title(f"DQN Q-values Step, Robot at {self.maze.sense_robot()}")
+        plt.show()
         return action, reward
 
     def _replay_experience(self):
@@ -336,7 +178,6 @@ class Robot(QRobot):
         # 周期性更新目标网络 
         self.update_counter  += 1 
         if self.update_counter  % self.target_update_freq  == 0:
-            print("what can i say")
             self.target_net.load_state_dict(self.policy_net.state_dict()) 
     
     def test_update(self):
@@ -363,5 +204,33 @@ class Robot(QRobot):
 
         reward = self.maze.move_robot(action) 
         # -----------------------------------------------------------------------
-        print("test",action,reward)
+        #print("test",action,reward)
         return action, reward
+from QRobot import QRobot
+from Maze import Maze
+from Runner import Runner
+
+"""  Deep Qlearning 算法相关参数： """
+
+epoch = 10  # 训练轮数
+maze_size = 5  # 迷宫size
+training_per_epoch=int(maze_size * maze_size * 2)
+
+""" 使用 DQN 算法训练 """
+
+g = Maze(maze_size=maze_size)
+r = Robot(g)
+
+runner = Runner(r)
+runner.run_training(epoch, training_per_epoch)
+
+runner.plot_results() 
+
+for i in range(epoch):
+    #print("epoch:",i)
+    for t in range(training_per_epoch):
+        a, ro = r.test_update()
+        #print("time:",t,"action:", a, "reward:", ro)
+        if g.sense_robot() == g.destination:
+            print("success")
+            break
